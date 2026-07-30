@@ -1,0 +1,203 @@
+
+This PR bootstraps `ytingbackend` as a Vercel-native Next.js backend focused on the first auth milestone: user registration, login, phone verification, token refresh, and protected user reads. It aligns the API surface and project structure with the requested Supabase/PostgreSQL schema and mobile-app REST usage.
+
+- **Backend scaffold**
+  - Added a minimal Next.js + TypeScript project layout for serverless deployment on Vercel
+  - Added `vercel.json`, TypeScript/ESLint config, and environment-variable template
+  - Added a lightweight root page documenting the exposed backend endpoints
+
+- **Auth and token flow**
+  - Implemented `POST /api/auth/register` to create users against the existing `users` table, hash passwords, and create phone verification tokens
+  - Implemented `POST /api/auth/login` with email/username/phone identifier support, failed-login tracking, and temporary account locking
+  - Implemented `POST /api/auth/refresh-token` for refresh-token based session renewal
+  - Implemented `POST /api/auth/verify-phone` to validate OTPs and mark phone verification state
+
+- **Protected user APIs**
+  - Implemented `GET /api/users/profile` for the authenticated caller
+  - Implemented `GET /api/users/[id]` with self/admin access control
+  - Added `GET /api/health` for deployment/runtime health checks
+
+- **Shared auth infrastructure**
+  - Added Supabase server client helper
+  - Added JWT signing/verification utilities for access and refresh tokens
+  - Added OTP generation helpers
+  - Added typed auth/database models and response sanitization to avoid leaking sensitive fields
+
+- **Request protection**
+  - Added Next.js middleware for JWT verification on `/api/users/*`
+  - Middleware propagates verified identity/admin context via request headers to the API handlers
+
+- **Deployment and usage docs**
+  - Added `instructionA.md` with setup, environment, deployment, and REST usage examples tailored for local development and Vercel deployment
+
+Example of the implemented API contract:
+
+```ts
+// POST /api/auth/login
+{
+  "identifier": "demo@example.com",
+  "password": "StrongPass123!"
+}
+```
+
+```json
+{
+  "accessToken": "<jwt>",
+  "refreshToken": "<jwt>",
+  "user": {
+    "user_id": "uuid",
+    "email": "demo@example.com",
+    "username": "demo-user",
+    "phone_verified": false
+  }
+}
+```
+
+<!-- START COPILOT CODING AGENT SUFFIX -->
+
+
+
+<!-- START COPILOT ORIGINAL PROMPT -->
+
+
+
+<details>
+
+<summary>Original prompt</summary>
+
+> Next.js Backend Structure
+> ytingbackend/
+> ├── pages/
+> │   ├── api/
+> │   │   ├── auth/
+> │   │   │   ├── register.ts       // POST /api/auth/register
+> │   │   │   ├── login.ts          // POST /api/auth/login
+> │   │   │   ├── verify-phone.ts   // POST /api/auth/verify-phone
+> │   │   │   └── refresh-token.ts  // POST /api/auth/refresh-token
+> │   │   ├── users/
+> │   │   │   ├── [id].ts           // GET /api/users/[id]
+> │   │   │   └── profile.ts        // GET /api/users/profile
+> │   │   └── health.ts             // GET /api/health
+> │   └── ...
+> ├── lib/
+> │   ├── supabase.ts               // Supabase client
+> │   ├── auth.ts                   // Auth logic
+> │   ├── jwt.ts                    // JWT handling
+> │   └── otp.ts                    // OTP generation
+> ├── middleware.ts                 // Auth middleware
+> ├── .env.local                    // Environment variables
+> └── vercel.json                   // Vercel config
+> This is ytingbackend the back end structure for my app yting.
+> Will be deployed to vercel.
+> Optimize for Vercel.
+> So that I can deploy to vercel with minimal commands.
+> TypeScript support (type-safe auth).
+> Built-in middleware for JWT verification.
+> Can serve mobile app API easily.
+> Serverless out of the box.
+> Easy to scale.
+> One deployment for everything.
+> First step is the user registration and login system.
+> Here is my database creation sql on supabase already created:
+> User Database Design for Multi-Continental Login System
+> Database Recommendation
+> PostgreSQL is ideal for your needs:
+> 
+> Open-source and powerful
+> ACID compliance ensures data integrity
+> Excellent horizontal scaling capabilities
+> Strong support for JSON fields (flexible data storage)
+> Can handle 100K+ users per continent efficiently
+> Great for geographic distribution with replication
+> 
+> CREATE TABLE users (
+>     -- Primary Identification
+>     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+>     username VARCHAR(50) UNIQUE NOT NULL,
+>     email VARCHAR(120) UNIQUE NOT NULL,
+>     
+>     -- Authentication
+>     password_hash VARCHAR(255) NOT NULL,
+>     phone_number VARCHAR(20) UNIQUE NOT NULL,
+>     phone_country_code VARCHAR(5) NOT NULL,
+>     
+>     -- Verification Status
+>     phone_verified BOOLEAN DEFAULT FALSE,
+>     phone_verification_token VARCHAR(100),
+>     phone_verification_attempts INT DEFAULT 0,
+>     email_verified BOOLEAN DEFAULT FALSE,
+>     
+>     -- Profile Information
+>     first_name VARCHAR(100),
+>     last_name VARCHAR(100),
+>     date_of_birth DATE,
+>     gender VARCHAR(20),
+>     profile_picture_url TEXT,
+>     
+>     -- Geographic & Regional
+>     country VARCHAR(100) NOT NULL,
+>     continent VARCHAR(50) NOT NULL,
+>     timezone VARCHAR(50),
+>     preferred_language VARCHAR(10) DEFAULT 'en',
+>     
+>     -- Account Status
+>     account_status VARCHAR(20) DEFAULT 'active',
+>     is_active BOOLEAN DEFAULT TRUE,
+>     is_admin BOOLEAN DEFAULT FALSE,
+>     
+>     -- Timestamps
+>     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+>     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+>     last_login TIMESTAMP,
+>     phone_verified_at TIMESTAMP,
+>     
+>     -- Security
+>     two_factor_enabled BOOLEAN DEFAULT FALSE,
+>     two_factor_secret VARCHAR(255),
+>     failed_login_attempts INT DEFAULT 0,
+>     account_locked_until TIMESTAMP,
+>     
+>     -- Additional Metadata
+>     metadata JSONB
+> );
+> 
+> -- Create indexes separately (correct PostgreSQL syntax)
+> CREATE INDEX idx_phone ON users(phone_number);
+> CREATE INDEX idx_email ON users(email);
+> CREATE INDEX idx_username ON users(username);
+> CREATE INDEX idx_continent ON users(continent);
+> CREATE INDEX idx_country ON users(country);
+> CREATE INDEX idx_created_at ON users(created_at);
+> 
+> 
+> Additional Recommended Tables
+> Phone Verification Tokens
+> 
+> CREATE TABLE phone_verification_tokens (
+>     token_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+>     user_id UUID NOT NULL REFERENCES users(user_id),
+>     otp_code VARCHAR(10) NOT NULL,
+>     is_used BOOLEAN DEFAULT FALSE,
+>     expires_at TIMESTAMP NOT NULL,
+>     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+> );
+> 
+> Login Audit Log
+> 
+> CREATE TABLE login_audit_log (
+>     log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+>     user_id UUID NOT NULL REFERENCES users(user_id),
+>     login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+>     ip_address INET,
+>     device_info JSONB,
+>     success BOOLEAN,
+>     failure_reason VARCHAR(255),
+>     continent VARCHAR(50)
+> );
+> 
+> Use RESTful API .
+> Finally create a full user registration and login system and create a instructionA.md file and provide a full instruction on how to build, deploy and test this backend .
+
+
+</details>
+
